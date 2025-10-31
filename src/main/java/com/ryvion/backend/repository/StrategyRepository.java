@@ -7,4 +7,7 @@ import java.util.List;
 
 public interface StrategyRepository extends JpaRepository<Strategy,Long> {
 
+    List<Strategy> findByUserId(Long userId);
+
+    List<Strategy> findByStatus(String status);
 }
