@@ -7,8 +7,7 @@ import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.Model;
 import com.anthropic.models.messages.TextBlock;
-import lombok.Getter;
-import lombok.Setter;
+import com.ryvion.backend.dto.OptimizeRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -93,13 +92,6 @@ public class OptimizeController {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @Getter
-    @Setter
-    static class OptimizeRequest {
-        private String riskLevel;
-        private String walletAddress;
     }
 
 }
