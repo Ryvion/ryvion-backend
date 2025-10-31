@@ -27,8 +27,8 @@ public class Strategy {
     @Column(length = 500)
     private String recommendation;
 
-    @Column(nullable = false) // PENDING CONFIMED CANCELED
-    private String status;
+    @Column(nullable = false)
+    private StrategyStatus status;
 
     private String txHash;
 
@@ -39,3 +39,4 @@ public class Strategy {
         createdAt = Instant.now();
     }
 }
+

@@ -1,7 +1,10 @@
 package com.ryvion.backend.service;
 
 import com.ryvion.backend.dto.OptimizeRequest;
+import com.ryvion.backend.dto.OptimizeResponse;
+import com.ryvion.backend.model.RiskLevel;
 import com.ryvion.backend.model.Strategy;
+import com.ryvion.backend.model.StrategyStatus;
 import com.ryvion.backend.model.User;
 import com.ryvion.backend.repository.StrategyRepository;
 import com.ryvion.backend.repository.UserRepository;
@@ -18,30 +21,33 @@ import java.util.Map;
 @Service
 public class OptimizeService {
 
-    @Autowired
     private UserRepository userRepository;
-
+    private BlockchainService blockchainService;
     private final ChatClient chatClient;
-
-
-    @Autowired
     private StrategyRepository strategyRepository;
 
-    public OptimizeService(ChatClient.Builder chatClientBuilder) {
-        chatClient = chatClientBuilder.build();
+    @Autowired
+    public OptimizeService(ChatClient.Builder chatClientBuilder, UserRepository userRepository, BlockchainService blockchainService, StrategyRepository strategyRepository) {
+        this.chatClient = chatClientBuilder.build();
+        this.blockchainService = blockchainService;
+        this.strategyRepository = strategyRepository;
+        this.userRepository = userRepository;
     }
 
-    public Strategy createStrategy(User user, BigInteger depositAmount, String riskLevel) {
+    public OptimizeResponse createStrategy(User user, BigInteger depositAmount, RiskLevel riskLevel) {
         Strategy strategy = new Strategy();
         strategy.setUser(user);
         strategy.setDepositAmount(depositAmount);
         strategy.setRecommendation(callAI(riskLevel));
-        strategy.setStatus("PENDING");
+        strategy.setStatus(StrategyStatus.PENDING);
 
-        return strategyRepository.save(strategy);
+        Strategy saveStrategy = strategyRepository.save(strategy);
+        blockchainService.executeStrategy(saveStrategy);
+
+        return new OptimizeResponse(saveStrategy.getId(), saveStrategy.getRecommendation(), saveStrategy.getStatus());
     }
 
-    private String callAI(String riskLevel) {
+    private String callAI(RiskLevel riskLevel) {
         try {
             String prompt = """
                 You are an investment analyst AI for Ryvion.

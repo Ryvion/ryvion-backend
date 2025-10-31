@@ -1,5 +1,6 @@
 package com.ryvion.backend.dto;
 
+import com.ryvion.backend.model.RiskLevel;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -7,5 +8,5 @@ import lombok.Setter;
 @Setter
 public class OptimizeRequest {
     private String walletAddress;
-    private String riskLevel;
+    private RiskLevel riskLevel;
 }
