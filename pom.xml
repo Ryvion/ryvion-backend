@@ -54,6 +54,11 @@
 		</dependency>
         <dependency>
             <groupId>org.web3j</groupId>
+            <artifactId>web3j-maven-plugin</artifactId>
+            <version>4.14.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.web3j</groupId>
             <artifactId>core</artifactId>
             <version>5.0.1</version>
         </dependency>
@@ -104,6 +109,54 @@
 					</excludes>
 				</configuration>
 			</plugin>
+            <plugin>
+                <groupId>org.web3j</groupId>
+                <artifactId>web3j-maven-plugin</artifactId>
+                <version>4.14.0</version>
+                <configuration>
+                    <packageName>com.ryvion.backend.contracts</packageName>
+                    <soliditySourceFiles>
+                        <directory>src/main/resources/solidity</directory>
+                        <includes>
+                            <include>YieldEscrow.sol</include>
+                        </includes>
+                    </soliditySourceFiles>
+                    <abiSourceFiles>
+                        <directory>src/main/resources/DO_NOT_SCAN_HERE</directory>
+                        <includes>
+                            <include>*.json</include>
+                        </includes>
+                    </abiSourceFiles>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>generate-web3j</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>generate-sources</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>add-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.build.directory}/generated-sources/web3j</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
 		</plugins>
 	</build>
 
