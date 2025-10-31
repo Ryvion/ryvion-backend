@@ -24,7 +24,7 @@ public class BlockchainService {
     public BlockchainService(
             @Value("${ARC_RPC_URL}") String rpcUrl,
             @Value("${BACKEND_PRIVATE_KEY}") String privateKey,
-            @Value("${RYVION_CONTRACT_ADDRESS}") String contractAddress,
+            @Value("${ESCROW_CONTRACT_ADDRESS}") String contractAddress,
             StrategyRepository strategyRepository
     ) {
         this.web3j = Web3j.build(new HttpService(rpcUrl));
