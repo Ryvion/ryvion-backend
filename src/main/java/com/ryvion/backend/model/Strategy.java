@@ -27,7 +27,7 @@ public class Strategy {
     @Column(length = 500)
     private String recommendation;
 
-    @Column(nullable = false)
+    @Column(nullable = false) // PENDING CONFIMED CANCELED
     private String status;
 
     private String txHash;
