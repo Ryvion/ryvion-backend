@@ -1,18 +1,16 @@
 package com.ryvion.backend.dto;
 
-import com.ryvion.backend.model.StrategyStatus;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 @Getter
 @Setter
+@NoArgsConstructor
 public class OptimizeResponse {
-    private Long strategyId;
     private String recommendation;
-    private StrategyStatus status;
-    public OptimizeResponse(Long strategyId, String recommendation, StrategyStatus status) {
-        this.strategyId = strategyId;
+
+    public OptimizeResponse(String recommendation) {
         this.recommendation = recommendation;
-        this.status = status;
     }
 }
