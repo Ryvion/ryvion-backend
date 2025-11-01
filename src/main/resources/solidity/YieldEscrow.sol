@@ -111,11 +111,9 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
     ) external onlyOwner nonReentrant {
         Strategy storage strategy = strategies[id];
         require(strategy.isActive, "Strategy not active");
-        require(
-            token.balanceOf(address(this)) >= yieldAmount,
-            "Insufficient yield balance"
-        );
-        require(yieldAmount >= minExpectedYield, "Slippage too high");
+        require(yieldAmount > 0, "Yield must be > 0");
+
+        token.safeTransferFrom(msg.sender, address(this), yieldAmount);
 
         uint256 fee = (yieldAmount * feePercentage) / 100;
         uint256 userYield = yieldAmount - fee;
