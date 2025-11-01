@@ -6,16 +6,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.web3j.contracts.token.ERC20Interface;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tuples.generated.Tuple7;
 import org.web3j.tx.gas.DefaultGasProvider;
-import org.web3j.tx.ReadonlyTransactionManager;
-import org.web3j.tx.TransactionManager;
-import org.web3j.protocol.core.methods.response.TransactionReceipt;
-import org.web3j.contracts.*;
 
 import java.math.BigInteger;
 
@@ -24,10 +19,6 @@ import java.math.BigInteger;
 public class YieldService {
 
     private final YieldEscrow contract;
-    private final Web3j web3j;
-    private final Credentials credentials;
-    private final String contractAddress;
-    private final String usdcTokenAddress = "0x3600000000000000000000000000000000000000";
 
     @Autowired
     public YieldService(
@@ -35,9 +26,8 @@ public class YieldService {
             @Value("${BACKEND_PRIVATE_KEY}") String privateKey,
             @Value("${ESCROW_CONTRACT_ADDRESS}") String contractAddress
     ) {
-        this.web3j = Web3j.build(new HttpService(rpcUrl));
-        this.credentials = Credentials.create(privateKey);
-        this.contractAddress = contractAddress;
+        Web3j web3j = Web3j.build(new HttpService(rpcUrl));
+        Credentials credentials = Credentials.create(privateKey);
 
         this.contract = YieldEscrow.load(
                 contractAddress,
@@ -48,16 +38,6 @@ public class YieldService {
 
         System.out.println("Yield Service (Agent) started. Wallet: " + credentials.getAddress());
         System.out.println("Watching contract: " + contractAddress);
-
-        new Thread(this::approveContract).start();
-    }
-
-    private void approveContract() {
-        try {
-            System.out.println("Checking allowance...");
-
-
-        }
     }
 
     @Scheduled(fixedRate = 300000)
