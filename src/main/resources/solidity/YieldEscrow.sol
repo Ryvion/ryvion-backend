@@ -13,7 +13,6 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
         address user;
         uint256 amount;
         bytes32 recommendation;
-        bool executed;
         bool isActive;
     }
 
@@ -28,15 +27,14 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
     mapping(address => uint256[]) public userStrategies;
 
     event StrategyCreated(uint256 indexed id, address indexed user, uint256 amount, bytes32 recommendationHash);
-    event PaymentExecuted(uint256 indexed id, address indexed user, uint256 payout, uint256 fee);
-    event StrategyWithdrawn(uint256 indexed id, address indexed user, uint256 refundedAmount);
+    event YieldDistributed(uint256 indexed id, address indexed user, uint256 yieldPayout, uint256 fee);
+    event StrategyWithdrawn(uint256 indexed id, address indexed user, uint256 totalAmount);
     event FeesWithdrawn(address indexed owner, uint256 amount);
     event AllowanceIncreased(address indexed user, uint256 amount);
 
     constructor(address _token, address _owner) Ownable(_owner) {
         require(_token != address(0), "token zero");
         token = IERC20(_token);
-        _transferOwnership(_owner); 
     }
 
     function createStrategy(string calldata recommendationStr, uint256 amount) external nonReentrant {
@@ -50,7 +48,6 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
             user: msg.sender,
             amount: amount,
             recommendation: recHash,
-            executed: false,
             isActive: true
         });
 
@@ -77,7 +74,6 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
             user: msg.sender,
             amount: amount,
             recommendation: recHash,
-            executed: false,
             isActive: true
         });
 
@@ -108,42 +104,34 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
     function withdraw(uint256 id) external nonReentrant {
         Strategy storage s = strategies[id];
         require(s.user == msg.sender, "Not your strategy");
-        require(!s.executed, "Already executed");
         require(s.isActive, "Strategy is not active");
         require(s.amount > 0, "Nothing to withdraw");
 
-        uint256 amount = s.amount;
+        uint256 totalAmount = s.amount;
 
-        s.executed = true;
         s.isActive = false;
         s.amount = 0;
         address recipient = s.user;
         s.user = address(0);
 
-        token.safeTransfer(recipient, amount);
-        emit StrategyWithdrawn(id, recipient, amount);
+        token.safeTransfer(recipient, totalAmount);
+        emit StrategyWithdrawn(id, recipient, totalAmount);
     }
 
-    function executeStrategy(uint256 id, uint256 yieldAmount) external onlyOwner nonReentrant {
+    function distributeYield(uint256 id, uint256 yieldAmount) external onlyOwner nonReentrant {
         Strategy storage s = strategies[id];
         require(s.user != address(0), "Strategy does not exist");
-        require(!s.executed, "Already executed");
         require(s.isActive, "Strategy is not active");
         require(yieldAmount > 0, "Yield amount must be > 0");
 
         uint256 fee = (yieldAmount * PLATFORM_FEE_BPS) / BPS_DENOM;
         uint256 yieldPayout = yieldAmount - fee;
-        uint256 totalPayout = s.amount + yieldPayout;
 
-        s.executed = true;
-        s.isActive = false;
-        s.amount = 0;
-        address recipient = s.user;
-        s.user = address(0);
+        s.amount += yieldPayout;
+
         accumulatedFees += fee;
 
-        token.safeTransfer(recipient, totalPayout);
-        emit PaymentExecuted(id, recipient, totalPayout, fee);
+        emit YieldDistributed(id, s.user, yieldPayout, fee);
     }
 
     function withdrawFees(address to) external onlyOwner nonReentrant {
@@ -164,43 +152,36 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
         address user,
         uint256 amount,
         bytes32 recommendationHash,
-        bool executed,
         bool isActive
     ) {
         Strategy storage s = strategies[id];
-        return (s.user, s.amount, s.recommendation, s.executed, s.isActive);
+        return (s.user, s.amount, s.recommendation, s.isActive);
     }
 
     function getStrategyStats() external view returns (
         uint256 totalStrategies,
         uint256 activeStrategies,
-        uint256 executedStrategies,
         uint256 totalVolume,
         uint256 totalFees
     ) {
         totalStrategies = nextId;
         
         uint256 activeCount = 0;
-        uint256 executedCount = 0;
         uint256 volume = 0;
         
         for (uint256 i = 0; i < nextId; i++) {
             Strategy storage s = strategies[i];
             if (s.user != address(0)) {
                 volume += s.amount;
-                if (s.isActive && !s.executed) {
+                if (s.isActive) {
                     activeCount++;
-                }
-                if (s.executed) {
-                    executedCount++;
                 }
             }
         }
         
-        return (totalStrategies, activeCount, executedCount, volume, accumulatedFees);
+        return (totalStrategies, activeCount, volume, accumulatedFees);
     }
 
-    //Emergency restoration of tokens (by owner)
     function emergencyWithdraw(address tokenAddress, uint256 amount) external onlyOwner {
         require(tokenAddress != address(0), "Invalid token address");
         IERC20(tokenAddress).safeTransfer(owner(), amount);

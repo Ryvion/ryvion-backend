@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
@@ -17,6 +18,7 @@ import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.gas.DefaultGasProvider;
 
 import java.math.BigInteger;
+import java.util.List;
 
 @Service
 @EnableScheduling
@@ -59,13 +61,10 @@ public class BlockchainService {
     @Async
     public void executeStrategy(Strategy strategy) {
         try {
-            YieldEscrow contract = YieldEscrow.load(
-                    contractAddress, web3j, credentials, new DefaultGasProvider()
-            );
-
-            TransactionReceipt receipt = contract.createStrategy(
-                    strategy.getRecommendation(),
-                    strategy.getDepositAmount()
+            TransactionReceipt receipt = this.contract.createStrategy(
+                    strategy.getUser().getWalletAddress(),
+                    strategy.getDepositAmount(),
+                    strategy.getRecommendation()
             ).send();
 
             strategy.setStatus(StrategyStatus.CONFIRMED);
@@ -73,8 +72,29 @@ public class BlockchainService {
             strategyRepository.save(strategy);
         }
         catch (Exception e){
+            System.err.println(e.getMessage());
             strategy.setStatus(StrategyStatus.FAILED);
-            throw new RuntimeException(e.getMessage());
+            strategyRepository.save(strategy);
+        }
+    }
+
+    @Scheduled(fixedRate = 240000)
+    public void distributeYieldToAll() {
+        List<Strategy> activeStrategies = strategyRepository.findByStatus(StrategyStatus.CONFIRMED);
+        if (activeStrategies.isEmpty()) {
+            System.out.println("No active strategy found");
+            return;
+        }
+
+        BigInteger yieldAmount = new BigInteger("1000000");
+        BigInteger feePercentage = new BigInteger("1");
+
+        for (Strategy strategy : activeStrategies) {
+            try{
+                this.contract.executeYield
+            } catch (Exception e) {
+
+            }
         }
     }
 }
