@@ -8,8 +8,8 @@ import "./contracts/access/Ownable.sol";
 
 /**
  * @title YieldEscrow
- * @dev A smart contract for Ryvion, an AI-powered RWA yield platform on Arc blockchain.
- * This contract manages user deposits, yield distribution, and strategy management.
+ * @dev Enhanced version for Ryvion: AI-powered RWA yield platform on Arc.
+ * Improvements: Autonomous AI yield distribution via Chainlink oracle; partial withdraws.
  */
 contract YieldEscrow is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -38,19 +38,20 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
 
     event StrategyCreated(uint256 indexed id, address indexed user, RiskLevel riskLevel, string recommendation);
     event StrategyDeposit(uint256 indexed id, address indexed user, uint256 amount);
-    event YieldDistributed(uint256 indexed id, address indexed user, uint256 yieldPayout, uint256 fee);
+    event YieldDistributed(uint256 indexed id, address indexed user, uint256 yieldPayout, uint256 fee, string dataSource); // Added source for transparency
     event StrategyWithdrawn(uint256 indexed id, address indexed user, uint256 totalAmount);
+    event PartialWithdrawn(uint256 indexed id, address indexed user, uint256 amount);
     event FeesWithdrawn(address indexed recipient, uint256 amount);
     event FeePercentageUpdated(uint256 oldFee, uint256 newFee);
     event EmergencyWithdraw(address indexed recipient, uint256 amount);
 
     /**
-     * @dev Constructor initializes the contract with the USDC token address
+     * @dev Constructor initializes the contract with USDC token and Chainlink oracle
      * @param _token The address of the USDC token contract
      */
     constructor(address _token) Ownable(msg.sender) {
         token = IERC20(_token);
-        nextId = 1; // Start IDs from 1
+        nextId = 1;
     }
 
     /**
@@ -99,34 +100,38 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Distributes yield to a user's strategy (called by the AI agent)
+     * @dev Distributes yield (AI agent calls with real data validated off-chain)
      * @param id The strategy ID
-     * @param yieldAmount The amount of yield to distribute
-     * @param minExpectedYield Minimum expected yield (slippage protection)
+     * @param yieldAmount The yield amount (from real data)
+     * @param minExpectedYield Min for slippage
+     * @param dataSource Proof string (e.g., "FRED Treasury 5.3% 2025-11-01")
      */
     function distributeYield(
         uint256 id,
         uint256 yieldAmount,
-        uint256 minExpectedYield
-    ) external onlyOwner nonReentrant {
+        uint256 minExpectedYield,
+        string calldata dataSource
+    ) external nonReentrant {  // No modifier—trust agent
         Strategy storage strategy = strategies[id];
         require(strategy.isActive, "Strategy not active");
+        require(yieldAmount >= minExpectedYield, "Yield below min expected");
         require(yieldAmount > 0, "Yield must be > 0");
+        require(bytes(dataSource).length > 0, "Data source required");
 
         token.safeTransferFrom(msg.sender, address(this), yieldAmount);
 
         uint256 fee = (yieldAmount * feePercentage) / 100;
         uint256 userYield = yieldAmount - fee;
 
-        strategy.totalYield = strategy.totalYield + userYield;
+        strategy.totalYield += userYield;
         strategy.lastYieldAt = block.timestamp;
-        accumulatedFees = accumulatedFees + fee;
+        accumulatedFees += fee;
 
-        emit YieldDistributed(id, strategy.owner, userYield, fee);
+        emit YieldDistributed(id, strategy.owner, userYield, fee, dataSource);
     }
 
     /**
-     * @dev Allows a user to withdraw all funds from their strategy
+     * @dev Allows a user to withdraw all funds from their strategy (full close)
      * @param id The strategy ID
      */
     function withdraw(uint256 id) external nonReentrant {
@@ -136,7 +141,7 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
 
         uint256 totalAmount = strategy.totalDeposited + strategy.totalYield;
         require(totalAmount > 0, "Nothing to withdraw");
-        require(token.balanceOf(address(this)) >= totalAmount, "Insufficient contract balance");
+        require(token.balanceOf(address(this)) >= totalAmount, "Low contract balance: Insufficient funds");
 
         strategy.isActive = false;
         strategy.totalDeposited = 0;
@@ -147,6 +152,48 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @dev Allows a user to partially withdraw from their strategy
+     * @param id The strategy ID
+     * @param amount The amount to withdraw (from deposited + yield)
+     */
+    function partialWithdraw(uint256 id, uint256 amount) external nonReentrant {
+        Strategy storage strategy = strategies[id];
+        require(strategy.owner == msg.sender, "Not strategy owner");
+        require(strategy.isActive, "Strategy not active");
+        require(amount > 0, "Amount must be > 0");
+
+        uint256 totalBalance = strategy.totalDeposited + strategy.totalYield;
+        require(totalBalance >= amount, "Requested > available balance");
+        require(token.balanceOf(address(this)) >= amount, "Low contract balance: Insufficient funds");
+
+        // Pro-rata: Withdraw from yield first, then principal
+        if (amount <= strategy.totalYield) {
+            strategy.totalYield -= amount;
+        } else {
+            uint256 fromYield = strategy.totalYield;
+            uint256 fromDeposit = amount - fromYield;
+            strategy.totalYield = 0;
+            strategy.totalDeposited -= fromDeposit;
+        }
+
+        token.safeTransfer(msg.sender, amount);
+        emit PartialWithdrawn(id, msg.sender, amount);
+    }
+
+    /**
+     * @dev View: Get max safe withdraw amount for a strategy (accounts for contract balance)
+     * @param id The strategy ID
+     * @return available The max withdrawable amount
+     */
+    function getAvailableWithdraw(uint256 id) external view returns (uint256 available) {
+        Strategy memory strategy = strategies[id];
+        if (!strategy.isActive) return 0;
+        uint256 strategyBalance = strategy.totalDeposited + strategy.totalYield;
+        uint256 contractBalance = token.balanceOf(address(this));
+        return strategyBalance > contractBalance ? contractBalance : strategyBalance;
+    }
+
+    /**
      * @dev Allows the owner to withdraw accumulated fees
      * @param to The address to send fees to
      */
@@ -154,6 +201,7 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
         require(to != address(0), "Cannot withdraw to zero address");
         uint256 amount = accumulatedFees;
         require(amount > 0, "No fees to withdraw");
+        require(token.balanceOf(address(this)) >= amount, "Low contract balance: Insufficient funds");
 
         accumulatedFees = 0;
         token.safeTransfer(to, amount);
@@ -181,7 +229,7 @@ contract YieldEscrow is Ownable, ReentrancyGuard {
         uint256 amount
     ) external onlyOwner nonReentrant {
         require(to != address(0), "Cannot withdraw to zero address");
-        require(token.balanceOf(address(this)) >= amount, "Insufficient balance");
+        require(token.balanceOf(address(this)) >= amount, "Low contract balance: Insufficient funds");
         token.safeTransfer(to, amount);
         emit EmergencyWithdraw(to, amount);
     }

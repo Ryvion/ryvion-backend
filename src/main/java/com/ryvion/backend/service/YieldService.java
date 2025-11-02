@@ -58,11 +58,11 @@ public class YieldService {
                 if (isActive && !userAddress.equals("0x0000000000000000000000000000000000000000")) {
                     System.out.println("Distributing yield to strategy: " + i + " for user: " + userAddress);
 
-                    contract.distributeYield(
-                            i,
-                            yieldAmount,
-                            minExpectedYield
-                    ).sendAsync();
+//                    contract.distributeYield(
+//                            i,
+//                            yieldAmount,
+//                            minExpectedYield
+//                    ).sendAsync();
                 }
             }
         } catch (Exception e) {
